@@ -1,7 +1,7 @@
 SyncThing Wrapper
 ---
 
-This is a wrapper program to assist using syncthing for remote development. It creates a local and remote syncthing config, and uploads syncthing to the remote target.
+This is a wrapper program to assist using syncthing for remote development. It creates a local and remote syncthing config, uploads syncthing to the remote target, and creates a pair of ssh tunnels for the hosts to communicate.
 
 ### Example config
 
