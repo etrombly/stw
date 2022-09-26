@@ -7,13 +7,13 @@ This is a wrapper program to assist using syncthing for remote development. It c
 
 For now the config file needs to be named `config.yml` and be located in the same directory you run stw from. In the future this will be configurable.
 
-`
+```
 remote_address: "192.168.0.99"
 remote_user: eric
 ssh_key: /home/eric/.ssh/id_rsa
 folders:
   - local_path: /tmp/test
     remote_path: /tmp/test
-`
+```
 
 ssh_key is optional, if you want to use username and password. If ssh-agent is running it will attempt to connect with the agent first, if that doesn't work it will fall back to prompting for the key password.
