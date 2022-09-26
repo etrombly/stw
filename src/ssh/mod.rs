@@ -1,5 +1,5 @@
 use rpassword::read_password;
-use ssh2::{PublicKey, Session};
+use ssh2::Session;
 use std::{net::TcpStream, path::Path};
 use thiserror::Error;
 
@@ -37,7 +37,7 @@ pub fn create_session(host: &str, user: &str, key: Option<&impl AsRef<Path>>) ->
             },
         }
     }
-    if sess.authenticated() == false {
+    if !sess.authenticated() {
         match key {
             Some(key) => {
                 let pubkey_location = format!("{:#?}.pub", key.as_ref());

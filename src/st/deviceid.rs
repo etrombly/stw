@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 /// Generate device id from pem cert.
 pub fn get_device_id(cert: &str) -> Result<String, Error> {
     // convert to der, then calculte sha256
-    let cert = X509::from_pem(&cert.as_bytes())?.to_der()?;
+    let cert = X509::from_pem(cert.as_bytes())?.to_der()?;
     let mut hasher = Sha256::new();
     hasher.update(cert);
     // base32 encode sha hash and remove trailing "="

@@ -9,14 +9,14 @@ use openssl::{
     hash::MessageDigest,
     nid::Nid,
     pkey::PKey,
-    x509::{X509Extension, X509NameBuilder, X509},
+    x509::{X509Extension, X509},
 };
 use serde::{Deserialize, Serialize};
 use std::{
     env,
     fs::{self, File},
     include_bytes,
-    io::{self, Read, Write},
+    io::{ Read, Write},
     net::{Shutdown, TcpListener, TcpStream},
     path::Path,
     sync::Mutex,
@@ -53,6 +53,8 @@ pub enum ConfError {
     NotFound,
     #[error("Couldn't create remote directory")]
     RemoteFolder,
+    #[error("Couldn't set channel")]
+    Channel,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -178,23 +180,23 @@ impl Conf {
         let remote_cert_path = Path::new(remote_cert_path.as_path().to_str().unwrap());
         {
             let mut remote_key = session.scp_send(
-                &remote_key_path,
+                remote_key_path,
                 0o640,
                 remote_keypair.key.as_bytes().len() as u64,
                 None,
             )?;
-            remote_key.write(remote_keypair.key.as_bytes())?;
+            remote_key.write_all(remote_keypair.key.as_bytes())?;
             remote_key.send_eof().unwrap();
             remote_key.wait_eof().unwrap();
             remote_key.close().unwrap();
             remote_key.wait_close().unwrap();
             let mut remote_cert = session.scp_send(
-                &remote_cert_path,
+                remote_cert_path,
                 0o640,
                 remote_keypair.cert.as_bytes().len() as u64,
                 None,
             )?;
-            remote_cert.write(remote_keypair.cert.as_bytes())?;
+            remote_cert.write_all(remote_keypair.cert.as_bytes())?;
             remote_cert.send_eof().unwrap();
             remote_cert.wait_eof().unwrap();
             remote_cert.close().unwrap();
@@ -252,7 +254,7 @@ impl Conf {
                 remote_config.as_bytes().len() as u64,
                 None,
             )?;
-            remote_config_file.write(&remote_config.as_bytes())?;
+            remote_config_file.write_all(&remote_config.as_bytes())?;
             remote_config_file.send_eof().unwrap();
             remote_config_file.wait_eof().unwrap();
             remote_config_file.close().unwrap();
@@ -265,8 +267,8 @@ impl Conf {
         // create remote port forward
         let (mut remote_listener, _) = loop {
             let remote_listener = session.channel_forward_listen(22001, None, None);
-            if remote_listener.is_ok() {
-                break remote_listener.unwrap();
+            if let Ok(remote_listener) = remote_listener {
+                break remote_listener;
             }
         };
 
@@ -277,8 +279,8 @@ impl Conf {
         // create remote channel to run syncthing
         let mut channel = loop {
             let channel = session.channel_session();
-            if channel.is_ok() {
-                break channel.unwrap();
+            if let Ok(channel) = channel {
+                break channel;
             }
         };
         while channel.request_pty("xterm", None, None).is_err() {}
@@ -291,7 +293,7 @@ impl Conf {
             .is_err()
         {}
         unsafe {
-            CHANNEL.set(Mutex::new(channel));
+            CHANNEL.set(Mutex::new(channel)).map_err(|_| ConfError::Channel)?;
         }
         println!("Remote syncthing started");
         println!(
@@ -304,8 +306,8 @@ impl Conf {
                 Ok(mut channel) => {
                     let mut stream = loop {
                         let stream = TcpStream::connect("127.0.0.1:22000");
-                        if stream.is_ok() {
-                            break stream.unwrap();
+                        if let Ok(stream) = stream {
+                            break stream;
                         }
                     };
                     thread::spawn(move || loop {
@@ -316,7 +318,7 @@ impl Conf {
                                     stream.shutdown(Shutdown::Both).unwrap();
                                     break;
                                 }
-                                stream.write(&buf[0..amount]).unwrap();
+                                stream.write_all(&buf[0..amount]).unwrap();
                             },
                             Err(x) => {},
                         }
@@ -327,7 +329,7 @@ impl Conf {
                                     while channel.wait_eof().is_err() {}
                                     break;
                                 }
-                                channel.write(&buf[0..amount]).unwrap();
+                                channel.write_all(&buf[0..amount]).unwrap();
                             },
                             Err(x) => {},
                         }
@@ -345,8 +347,8 @@ impl Conf {
                     stream.set_nonblocking(true).unwrap();
                     let mut channel = loop {
                         let channel = session.channel_direct_tcpip("127.0.0.1", 22000, None);
-                        if channel.is_ok() {
-                            break channel.unwrap();
+                        if let Ok(channel) = channel {
+                            break channel;
                         }
                     };
                     thread::spawn(move || loop {
@@ -358,7 +360,7 @@ impl Conf {
                                     while channel.wait_eof().is_err() {}
                                     break;
                                 }
-                                channel.write(&buf[0..amount]).unwrap();
+                                channel.write_all(&buf[0..amount]).unwrap();
                             },
                             Err(x) => {},
                         };
@@ -368,7 +370,7 @@ impl Conf {
                                     stream.shutdown(Shutdown::Both).unwrap();
                                     break;
                                 }
-                                stream.write(&buf[0..amount]).unwrap();
+                                stream.write_all(&buf[0..amount]).unwrap();
                             },
                             Err(x) => {},
                         }

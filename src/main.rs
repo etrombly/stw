@@ -43,10 +43,10 @@ fn main() {
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn init() {
-    let mut signals = Signals::new(&[SIGINT]).unwrap();
+    let mut signals = Signals::new([SIGINT]).unwrap();
 
     thread::spawn(move || {
-        for sig in signals.forever() {
+        for _sig in signals.forever() {
             unsafe {
                 if let Some(channel) = CHANNEL.get() {
                     let mut channel = channel.lock().unwrap();
