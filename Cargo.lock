@@ -407,6 +407,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "openssl-src"
+version = "111.22.0+1.1.1q"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f31f0d509d1c1ae9cada2f9539ff8f37933831fd5098879e482aa687d659853"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "openssl-sys"
 version = "0.9.75"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -415,6 +424,7 @@ dependencies = [
  "autocfg",
  "cc",
  "libc",
+ "openssl-src",
  "pkg-config",
  "vcpkg",
 ]
@@ -598,6 +608,7 @@ dependencies = [
  "sha2",
  "ssh2",
  "thiserror",
+ "typed-path",
 ]
 
 [[package]]
@@ -639,6 +650,12 @@ checksum = "8d82e1a7758622a465f8cee077614c73484dac5b836c02ff6a40d5d1010324d7"
 dependencies = [
  "serde",
 ]
+
+[[package]]
+name = "typed-path"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0303bfe6ef379273be7ce99d8a6a2e54261fd110a01cf70986ec0fe855ff075e"
 
 [[package]]
 name = "typenum"

@@ -2,7 +2,7 @@ use askama::Template;
 use directories::ProjectDirs;
 use gethostname::gethostname;
 use md5;
-use typed_path::UnixPath;
+use typed_path::{PathBuf, UnixEncoding};
 use openssl::{
     asn1::Asn1Time,
     bn::{BigNum, MsbOption},
@@ -90,8 +90,8 @@ impl Conf {
         let mut s = String::new();
         channel.read_to_string(&mut s)?;
         channel.wait_close()?;
-        let remote_config_folder = UnixPathBuf::new(&s.trim()).join(".config/stw/").join(&config_folder);
-        let remote_data_folder = UnixPathBuf::new(&s.trim()).join(".local/share/stw/");
+        let remote_config_folder = PathBuf::<UnixEncoding>::from(&s.trim()).join(".config/stw/").join(&config_folder);
+        let remote_data_folder = PathBuf::<UnixEncoding>::from(&s.trim()).join(".local/share/stw/");
         let mut channel = session.channel_session()?;
         channel.exec("hostname")?;
         let mut s = String::new();
@@ -120,8 +120,7 @@ impl Conf {
 
         // Create remote config folder
         let mut channel = session.channel_session()?;
-        println!("{:#?}", remote_config_folder);
-        channel.exec(&format!("mkdir -p {:#?}", remote_config_folder))?;
+        channel.exec(&format!("mkdir -p {:#?}", remote_config_folder.as_path().to_string_lossy()))?;
         let mut s = String::new();
         channel.read_to_string(&mut s)?;
         channel.wait_close()?;
@@ -131,8 +130,7 @@ impl Conf {
 
         // Create remote data folder
         let mut channel = session.channel_session()?;
-        println!("{:#?}", remote_data_folder);
-        channel.exec(&format!("mkdir -p {:#?}", remote_data_folder))?;
+        channel.exec(&format!("mkdir -p {:#?}", remote_data_folder.as_path().to_string_lossy()))?;
         let mut s = String::new();
         channel.read_to_string(&mut s)?;
         channel.wait_close()?;
@@ -143,6 +141,7 @@ impl Conf {
         println!("Uploading syncthing to remote");
         // Upload syncthing to remote
         let remote_syncthing_path = remote_data_folder.join("syncthing");
+        let remote_syncthing_path = Path::new(remote_syncthing_path.as_path().to_str().unwrap());
         let syncthing_binary_compressed = include_bytes!("../../resources/syncthing-linux-amd64-v1.21.0.xz");
         let mut f = std::io::Cursor::new(syncthing_binary_compressed);
         let mut syncthing_binary = Vec::new();
@@ -150,7 +149,7 @@ impl Conf {
         let mut sent = 0;
         let size = syncthing_binary.len();
         let mut remote_syncthing = session.scp_send(
-            &remote_syncthing_path,
+            remote_syncthing_path,
             0o755,
             size as u64,
             None,
@@ -168,7 +167,9 @@ impl Conf {
         // set cn to syncthing instead of hostname
         let remote_keypair = KeyPair::new("syncthing");
         let remote_key_path = remote_config_folder.join("key.pem");
+        let remote_key_path = Path::new(remote_key_path.as_path().to_str().unwrap());
         let remote_cert_path = remote_config_folder.join("cert.pem");
+        let remote_cert_path = Path::new(remote_cert_path.as_path().to_str().unwrap());
         {
             let mut remote_key = session.scp_send(
                 &remote_key_path,
@@ -237,6 +238,7 @@ impl Conf {
         let remote_config = remote_config.render()?;
 
         let remote_config_file_path = remote_config_folder.join("config.xml");
+        let remote_config_file_path = Path::new(remote_config_file_path.as_path().to_str().unwrap());
         {
             let mut remote_config_file = session.scp_send(
                 &remote_config_file_path,
@@ -273,7 +275,7 @@ impl Conf {
                 break channel.unwrap();
             }
         };
-        while channel.exec(&format!("{:#?} serve --home={:#?}", remote_syncthing_path, remote_config_folder)).is_err() {}
+        while channel.exec(&format!("{:#?} serve --home={:#?}", &remote_syncthing_path, remote_config_folder)).is_err() {}
         println!("Remote syncthing started");
         println!("Run `syncthing serve --home={:#?}` on local machine to sync", local_config_folder);
 
