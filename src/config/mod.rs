@@ -82,9 +82,9 @@ impl Conf {
             None => Err(ConfError::NotFound),
         }?;
 
-        println!("Creating remote config folder");
         // Verify connectivity and find config folder for remote session
         let session = create_session(&self.remote_address, &self.remote_user, self.ssh_key.as_ref())?;
+        println!("Creating remote config folder");
         let mut channel = session.channel_session()?;
         channel.exec("eval echo ~$USER")?;
         let mut s = String::new();
@@ -275,7 +275,7 @@ impl Conf {
                 break channel.unwrap();
             }
         };
-        while channel.exec(&format!("{:#?} serve --home={:#?}", &remote_syncthing_path, remote_config_folder)).is_err() {}
+        while channel.exec(&format!("{:#?} serve --home={:#?}", remote_syncthing_path, remote_config_folder.as_path().to_str().unwrap())).is_err() {}
         println!("Remote syncthing started");
         println!("Run `syncthing serve --home={:#?}` on local machine to sync", local_config_folder);
 
