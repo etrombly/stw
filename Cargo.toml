@@ -1,0 +1,24 @@
+[package]
+name = "stw"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.65"
+askama = "0.11.1"
+base32 = "0.4.0"
+directories = "4.0.1"
+gethostname = "0.2.3"
+hex-literal = "0.3.4"
+itertools = "0.10.5"
+lzma-rs = "0.2.0"
+md5 = "0.7.0"
+openssl = "0.10.41"
+rpassword = "7.0.0"
+serde = { version = "1.0.145", features = ["derive"] }
+serde_yaml = "0.9.13"
+sha2 = "0.10.6"
+ssh2 = {version = "0.9.3"}
+thiserror = "1.0.36"
