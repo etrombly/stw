@@ -2,6 +2,7 @@ use askama::Template;
 use directories::ProjectDirs;
 use gethostname::gethostname;
 use md5;
+use typed_path::UnixPath;
 use openssl::{
     asn1::Asn1Time,
     bn::{BigNum, MsbOption},
@@ -89,8 +90,8 @@ impl Conf {
         let mut s = String::new();
         channel.read_to_string(&mut s)?;
         channel.wait_close()?;
-        let remote_config_folder = Path::new(&s.trim()).join(".config/stw/").join(&config_folder);
-        let remote_data_folder = Path::new(&s.trim()).join(".local/share/stw/");
+        let remote_config_folder = UnixPathBuf::new(&s.trim()).join(".config/stw/").join(&config_folder);
+        let remote_data_folder = UnixPathBuf::new(&s.trim()).join(".local/share/stw/");
         let mut channel = session.channel_session()?;
         channel.exec("hostname")?;
         let mut s = String::new();
@@ -119,6 +120,7 @@ impl Conf {
 
         // Create remote config folder
         let mut channel = session.channel_session()?;
+        println!("{:#?}", remote_config_folder);
         channel.exec(&format!("mkdir -p {:#?}", remote_config_folder))?;
         let mut s = String::new();
         channel.read_to_string(&mut s)?;
@@ -129,6 +131,7 @@ impl Conf {
 
         // Create remote data folder
         let mut channel = session.channel_session()?;
+        println!("{:#?}", remote_data_folder);
         channel.exec(&format!("mkdir -p {:#?}", remote_data_folder))?;
         let mut s = String::new();
         channel.read_to_string(&mut s)?;
