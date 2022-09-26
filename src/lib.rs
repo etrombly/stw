@@ -9,8 +9,6 @@ pub static mut CHANNEL: OnceCell<Mutex<Channel>> = OnceCell::new();
 
 /// Config file management
 pub mod config;
-/// Signal handling
-pub mod signal;
 /// ssh related functions
 pub mod ssh;
 /// SyncThing related functions
