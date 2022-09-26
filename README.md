@@ -17,3 +17,8 @@ folders:
 ```
 
 ssh_key is optional, if you want to use username and password. If ssh-agent is running it will attempt to connect with the agent first, if that doesn't work it will fall back to prompting for the key password.
+
+You need to download and run syncthing manually on the local machine for now. STW lists the command to run after initializing, i.e.:
+```
+Run `syncthing serve --home="/home/eric/.config/stw/15506ed50944d59e1b43b4f40fe31c29"` on local machine to sync
+```

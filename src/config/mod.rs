@@ -70,7 +70,7 @@ pub struct Conf {
 
 impl Conf {
     pub fn get_folder(&self) -> String {
-        let digest = md5::compute(&self.remote_address);
+        let digest = md5::compute(format!("{}{}", &self.remote_address, gethostname().to_string_lossy().to_string()));
         format!("{:x}", digest)
     }
 
