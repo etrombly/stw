@@ -2,7 +2,6 @@ use askama::Template;
 use directories::ProjectDirs;
 use gethostname::gethostname;
 use md5;
-use typed_path::{PathBuf, UnixEncoding};
 use openssl::{
     asn1::Asn1Time,
     bn::{BigNum, MsbOption},
@@ -13,17 +12,19 @@ use openssl::{
     x509::{X509Extension, X509NameBuilder, X509},
 };
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
 use std::{
     env,
-    include_bytes,
     fs::{self, File},
+    include_bytes,
     io::{self, Read, Write},
     net::{Shutdown, TcpListener, TcpStream},
     path::Path,
+    sync::Mutex,
     thread,
+    time::Duration,
 };
 use thiserror::Error;
+use typed_path::{PathBuf, UnixEncoding};
 
 use crate::{
     ssh::{create_session, SshError},
@@ -31,6 +32,7 @@ use crate::{
         config::{self, ConfigTemplate},
         deviceid::get_device_id,
     },
+    CHANNEL,
 };
 
 #[derive(Error, Debug)]
@@ -84,13 +86,16 @@ impl Conf {
 
         // Verify connectivity and find config folder for remote session
         let session = create_session(&self.remote_address, &self.remote_user, self.ssh_key.as_ref())?;
+
         println!("Creating remote config folder");
         let mut channel = session.channel_session()?;
         channel.exec("eval echo ~$USER")?;
         let mut s = String::new();
         channel.read_to_string(&mut s)?;
         channel.wait_close()?;
-        let remote_config_folder = PathBuf::<UnixEncoding>::from(&s.trim()).join(".config/stw/").join(&config_folder);
+        let remote_config_folder = PathBuf::<UnixEncoding>::from(&s.trim())
+            .join(".config/stw/")
+            .join(&config_folder);
         let remote_data_folder = PathBuf::<UnixEncoding>::from(&s.trim()).join(".local/share/stw/");
         let mut channel = session.channel_session()?;
         channel.exec("hostname")?;
@@ -120,7 +125,10 @@ impl Conf {
 
         // Create remote config folder
         let mut channel = session.channel_session()?;
-        channel.exec(&format!("mkdir -p {:#?}", remote_config_folder.as_path().to_string_lossy()))?;
+        channel.exec(&format!(
+            "mkdir -p {:#?}",
+            remote_config_folder.as_path().to_string_lossy()
+        ))?;
         let mut s = String::new();
         channel.read_to_string(&mut s)?;
         channel.wait_close()?;
@@ -130,7 +138,10 @@ impl Conf {
 
         // Create remote data folder
         let mut channel = session.channel_session()?;
-        channel.exec(&format!("mkdir -p {:#?}", remote_data_folder.as_path().to_string_lossy()))?;
+        channel.exec(&format!(
+            "mkdir -p {:#?}",
+            remote_data_folder.as_path().to_string_lossy()
+        ))?;
         let mut s = String::new();
         channel.read_to_string(&mut s)?;
         channel.wait_close()?;
@@ -148,13 +159,8 @@ impl Conf {
         lzma_rs::xz_decompress(&mut f, &mut syncthing_binary).unwrap();
         let mut sent = 0;
         let size = syncthing_binary.len();
-        let mut remote_syncthing = session.scp_send(
-            remote_syncthing_path,
-            0o755,
-            size as u64,
-            None,
-        )?;
-        while sent < size  {
+        let mut remote_syncthing = session.scp_send(remote_syncthing_path, 0o755, size as u64, None)?;
+        while sent < size {
             sent += remote_syncthing.write(&syncthing_binary[sent..])?;
         }
         remote_syncthing.send_eof().unwrap();
@@ -264,7 +270,7 @@ impl Conf {
             }
         };
 
-        // craete local listener to forward 
+        // craete local listener to forward
         let local_listener = TcpListener::bind("127.0.0.1:22001")?;
         local_listener.set_nonblocking(true)?;
 
@@ -275,9 +281,23 @@ impl Conf {
                 break channel.unwrap();
             }
         };
-        while channel.exec(&format!("{:#?} serve --home={:#?}", remote_syncthing_path, remote_config_folder.as_path().to_str().unwrap())).is_err() {}
+        while channel.request_pty("xterm", None, None).is_err() {}
+        while channel
+            .exec(&format!(
+                "{:#?} serve --home={:#?}",
+                remote_syncthing_path,
+                remote_config_folder.as_path().to_str().unwrap()
+            ))
+            .is_err()
+        {}
+        unsafe {
+            CHANNEL.set(Mutex::new(channel));
+        }
         println!("Remote syncthing started");
-        println!("Run `syncthing serve --home={:#?}` on local machine to sync", local_config_folder);
+        println!(
+            "Run `syncthing serve --home={:#?}` on local machine to sync",
+            local_config_folder
+        );
 
         loop {
             match remote_listener.accept() {
@@ -315,7 +335,7 @@ impl Conf {
                             stream.shutdown(Shutdown::Both).unwrap();
                             break;
                         }
-                        thread::sleep(Duration::new(0,1));
+                        thread::sleep(Duration::new(0, 1));
                     });
                 },
                 Err(_) => {},
@@ -352,12 +372,12 @@ impl Conf {
                             },
                             Err(x) => {},
                         }
-                        thread::sleep(Duration::new(0,1));
+                        thread::sleep(Duration::new(0, 1));
                     });
                 },
                 Err(_) => {},
             }
-            thread::sleep(Duration::new(0,1));
+            thread::sleep(Duration::new(0, 1));
         }
         Ok(())
     }

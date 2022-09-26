@@ -1,10 +1,11 @@
 use anyhow::Result;
 
 use askama::Template;
-use ssh2::Session;
+
 use std::net::TcpStream;
 use stw::{
     config::load_config,
+    signal,
     st::{
         config::{ConfigTemplate, Folder},
         deviceid::get_device_id,
@@ -15,6 +16,7 @@ fn main() -> Result<()> {
     //let device_id = get_device_id("/home/eric/.config/syncthing/cert.pem")?;
     //println!("{}", device_id);
 
+    signal::init();
     let mut config = load_config(None)?;
     config.generate_config_templates()?;
 
