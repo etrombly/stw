@@ -50,10 +50,12 @@ fn init() {
             unsafe {
                 if let Some(channel) = CHANNEL.get() {
                     let mut channel = channel.lock().unwrap();
-                    let mut stream = channel.stream(0);
-                    let ctrl_c = format!("{}", 3 as char);
-                    while stream.write(ctrl_c.as_bytes()).is_err() {}
-                    while channel.send_eof().is_err() {}
+                    if !channel.eof() {
+                        let mut stream = channel.stream(0);
+                        let ctrl_c = format!("{}", 3 as char);
+                        while stream.write(ctrl_c.as_bytes()).is_err() {}
+                        while channel.send_eof().is_err() {}
+                    }
                     while channel.close().is_err() {}
                 }
                 low_level::emulate_default_handler(SIGINT).unwrap();

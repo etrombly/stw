@@ -12,11 +12,12 @@ use openssl::{
     x509::{X509Extension, X509},
 };
 use serde::{Deserialize, Serialize};
+use ssh2;
 use std::{
     env,
     fs::{self, File},
     include_bytes,
-    io::{ Read, Write},
+    io::{BufReader, BufWriter, Read, Write},
     net::{Shutdown, TcpListener, TcpStream},
     path::Path,
     sync::Mutex,
@@ -70,7 +71,11 @@ pub struct Conf {
 
 impl Conf {
     pub fn get_folder(&self) -> String {
-        let digest = md5::compute(format!("{}{}", &self.remote_address, gethostname().to_string_lossy().to_string()));
+        let digest = md5::compute(format!(
+            "{}{}",
+            &self.remote_address,
+            gethostname().to_string_lossy().to_string()
+        ));
         format!("{:x}", digest)
     }
 
@@ -179,12 +184,8 @@ impl Conf {
         let remote_cert_path = remote_config_folder.join("cert.pem");
         let remote_cert_path = Path::new(remote_cert_path.as_path().to_str().unwrap());
         {
-            let mut remote_key = session.scp_send(
-                remote_key_path,
-                0o640,
-                remote_keypair.key.as_bytes().len() as u64,
-                None,
-            )?;
+            let mut remote_key =
+                session.scp_send(remote_key_path, 0o640, remote_keypair.key.as_bytes().len() as u64, None)?;
             remote_key.write_all(remote_keypair.key.as_bytes())?;
             remote_key.send_eof().unwrap();
             remote_key.wait_eof().unwrap();
@@ -272,7 +273,7 @@ impl Conf {
             }
         };
 
-        // craete local listener to forward
+        // create local listener to forward
         let local_listener = TcpListener::bind("127.0.0.1:22001")?;
         local_listener.set_nonblocking(true)?;
 
@@ -301,81 +302,101 @@ impl Conf {
             local_config_folder
         );
 
+        // Main loop, need to improve this, getting occasional timeouts
         loop {
+            // Accepts connection on the remote port
             match remote_listener.accept() {
-                Ok(mut channel) => {
-                    let mut stream = loop {
-                        let stream = TcpStream::connect("127.0.0.1:22000");
-                        if let Ok(stream) = stream {
-                            break stream;
-                        }
-                    };
-                    thread::spawn(move || loop {
-                        let mut buf = [0_u8; 128];
-                        match channel.read(&mut buf) {
-                            Ok(amount) => {
-                                if amount == 0 {
-                                    stream.shutdown(Shutdown::Both).unwrap();
-                                    break;
-                                }
-                                stream.write_all(&buf[0..amount]).unwrap();
-                            },
-                            Err(x) => {},
-                        }
-                        match stream.read(&mut buf) {
-                            Ok(amount) => {
-                                if amount == 0 {
-                                    while channel.send_eof().is_err() {}
-                                    while channel.wait_eof().is_err() {}
-                                    break;
-                                }
-                                channel.write_all(&buf[0..amount]).unwrap();
-                            },
-                            Err(x) => {},
-                        }
-                        if channel.eof() {
-                            stream.shutdown(Shutdown::Both).unwrap();
-                            break;
-                        }
-                        thread::sleep(Duration::new(0, 1));
-                    });
+                Ok(channel) => {
+                    // open a stream to the local syncthing server
+                    if let Ok(mut stream) = TcpStream::connect("127.0.0.1:22000") {
+                        stream.set_nonblocking(true)?;
+                        stream.set_nodelay(true)?;
+                        let mut channel_reader = channel.stream(0);
+                        let mut channel_writer = channel.stream(0);
+                        let mut stream_reader = BufReader::new(stream.try_clone()?);
+
+                        thread::spawn(move || loop {
+                            let mut buf = [0_u8; 13312];
+                            match channel_reader.read(&mut buf) {
+                                Ok(amount) => {
+                                    if amount == 0 {
+                                        break;
+                                    }
+                                    stream.write_all(&buf[0..amount]).unwrap();
+                                },
+                                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => continue,
+                                Err(x) => {},
+                            }
+                            thread::sleep(Duration::new(0, 10));
+                        });
+
+                        thread::spawn(move || loop {
+                            let mut buf = [0_u8; 13312];
+                            match stream_reader.read(&mut buf) {
+                                Ok(amount) => {
+                                    if amount == 0 {
+                                        break;
+                                    }
+                                    channel_writer.write_all(&buf[0..amount]).unwrap();
+                                },
+                                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => continue,
+                                Err(x) => {},
+                            }
+                            thread::sleep(Duration::new(0, 10));
+                        });
+                    }
                 },
-                Err(_) => {},
+                Err(x) => {},
             };
             match local_listener.accept() {
                 Ok((mut stream, _)) => {
-                    stream.set_nonblocking(true).unwrap();
-                    let mut channel = loop {
-                        let channel = session.channel_direct_tcpip("127.0.0.1", 22000, None);
-                        if let Ok(channel) = channel {
-                            break channel;
-                        }
-                    };
-                    thread::spawn(move || loop {
-                        let mut buf = [0_u8; 128];
-                        match stream.read(&mut buf) {
-                            Ok(amount) => {
-                                if amount == 0 {
-                                    while channel.send_eof().is_err() {}
-                                    while channel.wait_eof().is_err() {}
-                                    break;
-                                }
-                                channel.write_all(&buf[0..amount]).unwrap();
+                    stream.set_nonblocking(true)?;
+                    stream.set_nodelay(true)?;
+
+                    if let Some(channel) = loop {
+                        match session.channel_direct_tcpip("127.0.0.1", 22000, None) {
+                            Ok(x) => break Some(x),
+                            Err(x) if x.code() == ssh2::ErrorCode::Session(-37) => continue,
+                            Err(x) => {
+                                println!("{:#?}", x);
+                                break None;
                             },
-                            Err(x) => {},
-                        };
-                        match channel.read(&mut buf) {
-                            Ok(amount) => {
-                                if amount == 0 {
-                                    stream.shutdown(Shutdown::Both).unwrap();
-                                    break;
-                                }
-                                stream.write_all(&buf[0..amount]).unwrap();
-                            },
-                            Err(x) => {},
                         }
-                        thread::sleep(Duration::new(0, 1));
-                    });
+                    } {
+                        let mut channel_reader = channel.stream(0);
+                        let mut channel_writer = channel.stream(0);
+                        let mut stream_reader = BufReader::new(stream.try_clone()?);
+
+                        thread::spawn(move || loop {
+                            let mut buf = [0_u8; 13312];
+                            match channel_reader.read(&mut buf) {
+                                Ok(amount) => {
+                                    if amount == 0 {
+                                        break;
+                                    }
+                                    stream.write_all(&buf[0..amount]).unwrap();
+                                },
+                                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => continue,
+                                Err(x) => {},
+                            }
+                            thread::sleep(Duration::new(0, 1));
+                        });
+
+                        thread::spawn(move || loop {
+                            let mut buf = [0_u8; 13312];
+                            match stream_reader.read(&mut buf) {
+                                Ok(amount) => {
+                                    if amount == 0 {
+                                        break;
+                                    }
+                                    channel_writer.write_all(&buf[0..amount]).unwrap();
+                                },
+                                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => continue,
+                                Err(x) => {},
+                            }
+                            thread::sleep(Duration::new(0, 10));
+                        });
+                    }
                 },
                 Err(_) => {},
             }
