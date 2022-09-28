@@ -302,7 +302,6 @@ impl Conf {
             local_config_folder
         );
 
-        // Main loop, need to improve this, getting occasional timeouts
         loop {
             // Accepts connection on the remote port
             match remote_listener.accept() {
