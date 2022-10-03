@@ -1,4 +1,5 @@
 use askama::Template;
+use bcrypt::BcryptError;
 use directories::ProjectDirs;
 use gethostname::gethostname;
 use md5;
@@ -30,7 +31,7 @@ use typed_path::{PathBuf, UnixEncoding};
 use crate::{
     ssh::{create_session, SshError},
     st::{
-        config::{self, ConfigTemplate},
+        config::{self, generate_password, ConfigTemplate},
         deviceid::get_device_id,
     },
     CHANNEL,
@@ -48,6 +49,8 @@ pub enum ConfError {
     Ssh2(#[from] ssh2::Error),
     #[error("ssh error")]
     Ssh(#[from] SshError),
+    #[error("error creating password")]
+    Bcrypt(#[from] BcryptError),
     #[error("syncthing lib error")]
     St(#[from] crate::st::error::Error),
     #[error("Couldn't find config directory")]
@@ -205,6 +208,9 @@ impl Conf {
         }
         let remote_device_id = get_device_id(&remote_keypair.cert)?;
 
+        // generate web ui password
+        let password = generate_password()?;
+
         // Generate local config file
         let local_folders = self
             .folders
@@ -219,6 +225,7 @@ impl Conf {
             local_device_name: local_hostname.clone(),
             remote_device_id: remote_device_id.clone(),
             remote_device_name: remote_hostname.into(),
+            gui_password: password.1.clone(),
             folders: local_folders,
         };
 
@@ -242,6 +249,7 @@ impl Conf {
             local_device_name: remote_hostname.into(),
             remote_device_id: local_device_id,
             remote_device_name: local_hostname,
+            gui_password: password.1.clone(),
             folders: remote_folders,
         };
         let remote_config = remote_config.render()?;
@@ -297,10 +305,8 @@ impl Conf {
             CHANNEL.set(Mutex::new(channel)).map_err(|_| ConfError::Channel)?;
         }
         println!("Remote syncthing started");
-        println!(
-            "Run `syncthing serve --home={:#?}` on local machine to sync",
-            local_config_folder
-        );
+        println!("Local web ui username = stw\nLocal web ui password = {}", password.0);
+        println!("Run `syncthing serve --home={local_config_folder:#?}` on local machine to sync");
 
         loop {
             // Accepts connection on the remote port

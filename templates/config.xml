@@ -62,7 +62,7 @@
     <gui enabled="true" tls="false" debugging="false">
         <address>127.0.0.1:8384</address>
         <user>stw</user>
-        <password>$2a$10$TyKj4CB.KgtFoMSM.XmLF.otcxLVG6rzqvnwm.cjSKrG.iJJVWUBm</password>
+        <password>{{ gui_password }}</password>
         <apikey>yfSkcbyknpzKte5rRJJQZUTDMJQSfqzN</apikey>
         <theme>default</theme>
     </gui>
